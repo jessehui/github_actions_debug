@@ -32,28 +32,35 @@ jobs:
       with:
         qemu-version: ${{ env.QEMU_VERSION }}
 
+    # - name: Clone from source
+    #   run: |
+    #     cd $GITHUB_WORKSPACE;
+    #     git clone https://github.com/jessehui/Occlum-for-TDX.git occlum-for-tdx;
+
+    - name: Checkout occlum for tdx
+      uses: actions/checkout@v4
+      with:
+        repository: jessehui/Occlum-for-TDX
+        token: ${{ secrets.GH_PAT }} # `GH_PAT` is a secret that contains your PAT
+        path: /root/occlum-for-tdx
+
     # Image built from baiduxlab/sgx-rust:2004-1.1.3 installing Intel SGX SDK 2.17.101.1 (Occlum version) also need to install libfuse-dev for sefs
     - name: Create container
-      run: docker run -itd --name=${{ github.job }} -v $GITHUB_WORKSPACE:/root/rust-tee-sdk occlumtest/occlum-tdx:v0.2-ubuntu20.04
+      run: docker run -itd --name=${{ github.job }} -v /root/occlum-for-tdx/:/root/rust-tee-sdk occlumtest/occlum-tdx:v0.2-ubuntu20.04
       shell: bash
 
     - name: Make configuration
       run: docker exec ${{ github.job }} bash -c 'git config --global --add safe.directory "*" && rustup component add rust-src --toolchain nightly-2023-11-17-x86_64-unknown-linux-gnu'
 
-    - name: Clone from source
-      run: |
-        cd $GITHUB_WORKSPACE; 
-        git clone https://github.com/jessehui/Occlum-for-TDX.git occlum-for-tdx; 
-
     - name: Build the tools
-      run: docker exec ${{ github.job }} bash -c "source /opt/intel/sgxsdk/environment && cd /root/rust-tee-sdk/occlum-for-tdx/occlum && make submodule"
+      run: docker exec ${{ github.job }} bash -c "source /opt/intel/sgxsdk/environment && cd /root/rust-tee-sdk/occlum && make submodule"
       shell: bash
 
     - name: Build test image
-      run: docker exec ${{ github.job }} bash -c "source /opt/intel/sgxsdk/environment && cd /root/rust-tee-sdk/occlum-for-tdx/occlum && make test-img"
+      run: docker exec ${{ github.job }} bash -c "source /opt/intel/sgxsdk/environment && cd /root/rust-tee-sdk/occlum && make test-img"
 
     - name: Build the Enclave
-      run: docker exec ${{ github.job }} bash -c "source /opt/intel/sgxsdk/environment && cd /root/rust-tee-sdk/occlum-for-tdx/occlum && SGX_MODE=SIM make"
+      run: docker exec ${{ github.job }} bash -c "source /opt/intel/sgxsdk/environment && cd /root/rust-tee-sdk/occlum && SGX_MODE=SIM make"
       shell: bash
 
     - name: Setup tmate session
