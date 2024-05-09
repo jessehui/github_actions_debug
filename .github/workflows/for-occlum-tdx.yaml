@@ -42,6 +42,7 @@ jobs:
       with:
         repository: jessehui/Occlum-for-TDX
         token: ${{ secrets.GH_PAT }} # `GH_PAT` is a secret that contains your PAT
+        branch: fix_fs_close
         path: occlum-for-tdx
 
     - name: test
