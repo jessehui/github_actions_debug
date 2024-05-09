@@ -1,0 +1,74 @@
+name: Essential Test
+
+on:
+  push:
+  pull_request:
+
+# Cancel previous running jobs on push or pull request
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  RUST_VERSION: "nightly-2023-11-17"
+  QEMU_VERSION: "8.1.3"
+
+jobs:
+  main_test:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
+
+    - name: Install rust dependency on host
+      run: |
+        curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain $RUST_VERSION -y && cargo -V
+        rustup component add rust-src --toolchain "$RUST_VERSION"-x86_64-unknown-linux-gnu
+      shell: bash
+    
+    - uses: ./.github/workflows/actions/setup-qemu
+      with:
+        qemu-version: ${{ env.QEMU_VERSION }}
+
+    # Image built from baiduxlab/sgx-rust:2004-1.1.3 installing Intel SGX SDK 2.17.101.1 (Occlum version) also need to install libfuse-dev for sefs
+    - name: Create container
+      run: docker run -itd --name=${{ github.job }} -v $GITHUB_WORKSPACE:/root/rust-tee-sdk occlumtest/occlum-tdx:v0.2-ubuntu20.04
+      shell: bash
+
+    - name: Make configuration
+      run: docker exec ${{ github.job }} bash -c 'git config --global --add safe.directory "*" && rustup component add rust-src --toolchain nightly-2023-11-17-x86_64-unknown-linux-gnu'
+
+    - name: Clone from source
+      run: |
+        cd $GITHUB_WORKSPACE; 
+        git clone https://github.com/jessehui/Occlum-for-TDX.git occlum-for-tdx; 
+
+    - name: Build the tools
+      run: docker exec ${{ github.job }} bash -c "source /opt/intel/sgxsdk/environment && cd /root/rust-tee-sdk/occlum-for-tdx/occlum && make submodule"
+      shell: bash
+
+    - name: Build test image
+      run: docker exec ${{ github.job }} bash -c "source /opt/intel/sgxsdk/environment && cd /root/rust-tee-sdk/occlum-for-tdx/occlum && make test-img"
+
+    - name: Build the Enclave
+      run: docker exec ${{ github.job }} bash -c "source /opt/intel/sgxsdk/environment && cd /root/rust-tee-sdk/occlum-for-tdx/occlum && SGX_MODE=SIM make"
+      shell: bash
+
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+
+    - name: Run demo uefi-boot
+      timeout-minutes: 3
+      run: cd $GITHUB_WORKSPACE/kernel_loader && make run ACCEL=0 SUDO=sudo CHECK=1 qemu_path=$GITHUB_WORKSPACE/qemu_build/bin/
+      shell: bash
+
+    - name: Run demo multi-boot
+      timeout-minutes: 3
+      run: cd $GITHUB_WORKSPACE/kernel_loader && make run ACCEL=0 SUDO=sudo BOOT=multiboot CHECK=1 qemu_path=$GITHUB_WORKSPACE/qemu_build/bin/
+      shell: bash
+
+    - name: Check output
+      run: cd $GITHUB_WORKSPACE/kernel_ci_checker && make
+      shell: bash
