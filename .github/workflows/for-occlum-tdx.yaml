@@ -44,6 +44,7 @@ jobs:
         token: ${{ secrets.GH_PAT }} # `GH_PAT` is a secret that contains your PAT
         path: occlum-for-tdx
         fetch-depth: 0
+        ref: fix_fx_close
 
     - name: test
       run: |
@@ -78,6 +79,7 @@ jobs:
     - name: Setup tmate session
       uses: mxschmitt/action-tmate@v3
 
+    # make run ACCEL=0 SUDO=sudo CHECK=1 qemu_path=~/work/github_actions_debug/github_actions_debug/qemu_build/bin/ 2>&1 | tee test.log
     - name: Run demo uefi-boot
       timeout-minutes: 3
       run: cd $GITHUB_WORKSPACE/kernel_loader && make run ACCEL=0 SUDO=sudo CHECK=1 qemu_path=$GITHUB_WORKSPACE/qemu_build/bin/
